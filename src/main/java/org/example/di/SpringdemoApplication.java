@@ -1,32 +1,17 @@
 package org.example.di;
 
-import org.example.datasource.reposiroty.CurrentGameRepository;
-import org.example.domain.model.CurrentGame;
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Bean;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication
 @ComponentScan(basePackages = {"org.example"})
+@EnableJpaRepositories(basePackages = "org.example.datasource.repository")
+@EntityScan(basePackages = "org.example.datasource.model") // Указываем пакет с сущностями
 public class SpringdemoApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(SpringdemoApplication.class, args);
-
-    }
-    @Bean
-    public CommandLineRunner run(CurrentGameRepository games) {
-        return args -> {
-            // Создание новой игры
-            CurrentGame game = new CurrentGame();
-
-            // Сохранение игры в репозитории
-            games.save(game);
-
-            // Вывод ID новой игры
-            System.out.println("New game ID: " + game.getId());
-        };
     }
 }

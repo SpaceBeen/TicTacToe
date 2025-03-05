@@ -1,22 +1,19 @@
 package org.example.datasource.model;
 
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "current_game", schema = "tictactoe")
 public class CurrentGameEntity {
-    private String id; // UUID хранится как строка
-    private GameFieldEntity gameField; // Матрица хранится как JSON-строка
+    @Id
+    private String id;
 
-    public String getId() {
-        return id;
-    }
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "game_field_id")
+    private GameFieldEntity gameField;
 
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public GameFieldEntity getGameField() {
-        return gameField;
-    }
-
-    public void setGameField(GameFieldEntity gameField) {
-        this.gameField = gameField;
-    }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+    public GameFieldEntity getGameField() { return gameField; }
+    public void setGameField(GameFieldEntity gameField) { this.gameField = gameField; }
 }

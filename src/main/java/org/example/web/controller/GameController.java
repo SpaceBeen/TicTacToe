@@ -14,6 +14,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/game")
+@CrossOrigin(origins = "http://localhost:63342") // Разрешаем запросы с порта IntelliJ
 public class GameController {
     private final GameService gameService;
     private final GameMapper gameMapper;
@@ -24,45 +25,56 @@ public class GameController {
         this.gameMapper = gameMapper;
     }
 
+    @PostMapping("/new")
+    public ResponseEntity<GameDTO> createNewGame() {
+        CurrentGame newGame = new CurrentGame();
+        gameService.saveGame(newGame);
+        GameDTO response = gameMapper.toGameDTO(newGame);
+        System.out.println("New game created with ID: " + newGame.getId()); // Для отладки
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{gameId}")
     public ResponseEntity<?> updateGame(@PathVariable UUID gameId, @RequestBody(required = false) MoveDTO moveDTO) {
         try {
             CurrentGame currentGame = gameService.getGame(gameId);
+            if (currentGame == null) {
+                return ResponseEntity.badRequest().body(new ErrorResponseDTO("Game not found"));
+            }
+
             if (moveDTO == null) {
                 GameDTO response = gameMapper.toGameDTO(currentGame);
                 return ResponseEntity.ok(response);
             }
-            gameService.printField(currentGame.getGameField().getField());
 
             if (!gameService.validateGameField(currentGame.getGameField().getField(), moveDTO.getMove())) {
-                return ResponseEntity.badRequest().body("invalid move");
+                return ResponseEntity.badRequest().body(new ErrorResponseDTO("Invalid move"));
             }
 
+            // Ход игрока
             currentGame.getGameField().setField(moveDTO.getMove()[0], moveDTO.getMove()[1], 1);
+            Integer gameOver = gameService.isGameOver(currentGame.getGameField().getField());
+            if (gameOver != null) {
+                String winner = gameOver == 1 ? "Player wins" : gameOver == -1 ? "Computer wins" : "Draw";
+                gameService.saveGame(currentGame); // Обновляем существующую игру
+                return ResponseEntity.ok(new GameDTO(currentGame.getId(), currentGame.getGameField().getField(), winner));
+            }
 
-            if (gameService.isGameOver(currentGame.getGameField().getField()) != null)
-                return ResponseEntity.ok("game Over,winner is " + gameService.isGameOver(currentGame.getGameField().getField()).toString());
+            // Ход компьютера
+            int[] computerMove = gameService.getNextMove(currentGame.getGameField().getField());
+            currentGame.getGameField().setField(computerMove[0], computerMove[1], -1);
+            gameService.saveGame(currentGame); // Обновляем существующую игру
 
-            gameService.saveGame(currentGame);
-
-            int[] next_move = gameService.getNextMove(currentGame.getGameField().getField());
-
-            currentGame.getGameField().setField(next_move[0], next_move[1], -1);
-
-            gameService.printField(currentGame.getGameField().getField());
-
-            if (gameService.isGameOver(currentGame.getGameField().getField()) != null)
-                return ResponseEntity.ok("game Over,winner is " + gameService.isGameOver(currentGame.getGameField().getField()).toString());
-
-            gameService.saveGame(currentGame);
+            gameOver = gameService.isGameOver(currentGame.getGameField().getField());
+            if (gameOver != null) {
+                String winner = gameOver == 1 ? "Player wins" : gameOver == -1 ? "Computer wins" : "Draw";
+                return ResponseEntity.ok(new GameDTO(currentGame.getId(), currentGame.getGameField().getField(), winner));
+            }
 
             GameDTO response = gameMapper.toGameDTO(currentGame);
-
             return ResponseEntity.ok(response);
-
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(new ErrorResponseDTO(e.getMessage()));
         }
     }
-
 }
