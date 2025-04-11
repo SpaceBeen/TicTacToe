@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const gameState = await response.json();
             renderBoard(gameState.gameBoard);
             status.textContent = gameState.status;
+            checkGameEnd(gameState); // Проверяем, закончилась ли игра
         } catch (error) {
             console.error('Error updating game:', error);
             status.textContent = 'Ошибка при обновлении игры';
@@ -65,6 +66,35 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             console.warn('Notification text element is null');
         }
+    }
+
+    // Функция для проверки окончания игры и отключения ячеек
+    function checkGameEnd(gameState) {
+        // Предполагаем, что статус игры содержит информацию об окончании
+        // Например, "Player X wins", "Player O wins" или "Draw"
+        const statusText = gameState.status.toLowerCase();
+        if (statusText.includes('wins') || statusText.includes('draw')) {
+            disableRemainingCells(gameState.gameBoard);
+        }
+    }
+
+    // Функция для отключения оставшихся свободных ячеек
+    function disableRemainingCells(board) {
+        cells.forEach(cell => {
+            const x = parseInt(cell.dataset.x);
+            const y = parseInt(cell.dataset.y);
+            const value = board[x][y];
+            if (value === 0) { // Если ячейка пуста (значение 0)
+                cell.classList.add('disabled');
+            }
+        });
+    }
+
+    // Функция для сброса состояния ячеек
+    function resetCells() {
+        cells.forEach(cell => {
+            cell.classList.remove('disabled');
+        });
     }
 
     async function login(login, password) {
@@ -139,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (userLogin) userLogin.textContent = '';
         status.textContent = 'Нажмите "Новая игра" для начала';
         if (authStatus) authStatus.textContent = '';
+        resetCells(); // Сбрасываем состояние ячеек при выходе
     });
 
     notificationClose.addEventListener('click', () => {
@@ -160,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentGameId = gameState.id;
             renderBoard(gameState.gameBoard);
             status.textContent = gameState.status;
+            resetCells(); // Сбрасываем состояние ячеек при новой игре
         } catch (error) {
             console.error('Error creating new game:', error);
             status.textContent = 'Ошибка при создании игры: ' + error.message;
@@ -171,6 +203,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!currentGameId) {
                 alert('Сначала начните новую игру!');
                 return;
+            }
+            if (cell.classList.contains('disabled')) {
+                return; // Пропускаем клик, если ячейка уже неактивна
             }
             const x = parseInt(cell.dataset.x);
             const y = parseInt(cell.dataset.y);
@@ -190,6 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const gameState = await response.json();
                 renderBoard(gameState.gameBoard);
                 status.textContent = gameState.status;
+                checkGameEnd(gameState); // Проверяем, закончилась ли игра после хода
             } catch (error) {
                 console.error('Error making move:', error);
                 status.textContent = 'Ошибка хода: ' + error.message;

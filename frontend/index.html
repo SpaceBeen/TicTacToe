@@ -8,14 +8,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-<div class="container">
-    <header class="header">
-        <h1>Крестики-Нолики</h1>
+<header class="header">
+    <div class="header-container">
+        <h1 class="header-title">Крестики-Нолики</h1>
         <div id="user-login" class="user-login"></div>
-    </header>
+        <button class="menu-toggle">☰</button>
+    </div>
+</header>
 
+<main class="container">
     <!-- Форма авторизации -->
-    <div id="auth-section" class="auth-section">
+    <section id="auth-section" class="auth-section">
         <h2>Вход / Регистрация</h2>
         <input type="text" id="login" placeholder="Логин" class="input-field">
         <input type="password" id="password" placeholder="Пароль" class="input-field">
@@ -24,14 +27,11 @@
             <button id="registerBtn" class="auth-btn register">Регистрация</button>
         </div>
         <p id="auth-status" class="status-text"></p>
-    </div>
+    </section>
 
     <!-- Игровое поле -->
-    <div id="game-section" class="game-section" style="display: none;">
-        <div class="game-controls">
-            <button id="newGameBtn" class="game-btn">Новая игра</button>
-            <button id="logoutBtn" class="game-btn logout">Выйти</button>
-        </div>
+    <section id="game-section" class="game-section" style="display: none;">
+        <div id="status" class="game-status">Нажмите "Новая игра" для начала</div>
         <div class="board">
             <div class="cell" data-x="0" data-y="0"></div>
             <div class="cell" data-x="0" data-y="1"></div>
@@ -43,15 +43,30 @@
             <div class="cell" data-x="2" data-y="1"></div>
             <div class="cell" data-x="2" data-y="2"></div>
         </div>
-        <div id="status" class="game-status">Нажмите "Новая игра" для начала</div>
-    </div>
+        <div class="game-controls">
+            <button id="newGameBtn" class="game-btn">Новая игра</button>
+            <button id="logoutBtn" class="game-btn logout">Выйти</button>
+        </div>
+    </section>
 
     <!-- Всплывающее окно -->
     <div id="notification" class="notification">
         <p id="notification-text"></p>
         <button id="notification-close" class="notification-close">Закрыть</button>
     </div>
-</div>
+</main>
+
+<footer class="footer">
+    <div class="footer-container">
+        <p>© 2025 Крестики-Нолики. Все права защищены.</p>
+        <div class="footer-links">
+            <a href="#">О проекте</a>
+            <a href="#">Поддержка</a>
+            <a href="#">Правила</a>
+        </div>
+    </div>
+</footer>
+
 <script src="script.js"></script>
 </body>
 </html>
