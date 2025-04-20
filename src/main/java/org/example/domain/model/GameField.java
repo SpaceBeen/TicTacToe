@@ -1,5 +1,8 @@
 package org.example.domain.model;
 
+import org.springframework.stereotype.Component;
+
+@Component
 public class GameField {
     private int[][] field;
 

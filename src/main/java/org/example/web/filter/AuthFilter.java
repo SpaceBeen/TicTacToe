@@ -6,47 +6,69 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.example.domain.service.AuthService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.example.domain.service.AuthorisationService;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.filter.GenericFilterBean;
 
 import java.io.IOException;
 import java.util.UUID;
 
-@Component
 public class AuthFilter extends GenericFilterBean {
-    private final AuthService authService;
+    private final AuthorisationService authService;
 
-    @Autowired
-    public AuthFilter(AuthService authService) {
+    public AuthFilter(AuthorisationService authService) {
         this.authService = authService;
     }
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain filterChain)
             throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
-
         String path = httpRequest.getRequestURI();
-        System.out.println("Request path: " + path); // Отладка
-        System.out.println("Authorization header: " + httpRequest.getHeader("Authorization")); // Отладка
+        String method = httpRequest.getMethod();
 
-        if (path.equals("/auth/register") || path.equals("/auth/login")) {
-            chain.doFilter(request, response);
+        System.out.println("Filter: Path = " + path + ", Method = " + method);
+
+        if (path.endsWith("/auth/signup") || path.endsWith("/auth/login")) {
+            System.out.println("Filter: Skipping auth check for " + path);
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        if ("OPTIONS".equalsIgnoreCase(method)) {
+            httpResponse.setHeader("Access-Control-Allow-Origin", "http://localhost:63342");
+            httpResponse.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            httpResponse.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            httpResponse.setHeader("Access-Control-Max-Age", "3600");
+            httpResponse.setStatus(HttpServletResponse.SC_OK);
+            System.out.println("Filter: Handling OPTIONS request");
             return;
         }
 
         String authHeader = httpRequest.getHeader("Authorization");
-        UUID userId = authService.authorize(authHeader);
+        if (authHeader == null || authHeader.isEmpty()) {
+            httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            httpResponse.setContentType("application/json");
+            httpResponse.getWriter().write("{\"error\": \"Missing Authorization header\"}");
+            System.out.println("Filter: Missing Authorization header");
+            return;
+        }
 
+        UUID userId = authService.authorise(authHeader);
         if (userId != null) {
+            // Устанавливаем Authentication в SecurityContext
+            Authentication auth = new UsernamePasswordAuthenticationToken(userId.toString(), null, null);
+            SecurityContextHolder.getContext().setAuthentication(auth);
             httpRequest.setAttribute("userId", userId);
-            chain.doFilter(request, response);
+            filterChain.doFilter(request, response);
         } else {
-            httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 401, а не 403
-            httpResponse.getWriter().write("Unauthorized");
+            httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            httpResponse.setContentType("application/json");
+            httpResponse.getWriter().write("{\"error\": \"Invalid credentials\"}");
+            System.out.println("Filter: Invalid credentials");
         }
     }
 }

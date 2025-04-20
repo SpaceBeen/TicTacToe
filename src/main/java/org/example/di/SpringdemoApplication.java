@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication
 @ComponentScan(basePackages = {"org.example"})
 @EnableJpaRepositories(basePackages = "org.example.datasource.repository")
-@EntityScan(basePackages = "org.example.datasource.model") // Указываем пакет с сущностями
+@EntityScan(basePackages = "org.example.datasource.model")
 public class SpringdemoApplication {
     public static void main(String[] args) {
         SpringApplication.run(SpringdemoApplication.class, args);

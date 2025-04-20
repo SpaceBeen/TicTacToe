@@ -1,19 +1,36 @@
 package org.example.datasource.model;
 
 import jakarta.persistence.*;
+import lombok.*;
+
+import java.util.UUID;
 
 @Entity
 @Table(name = "current_game", schema = "tictactoe")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class CurrentGameEntity {
     @Id
-    private String id;
+    private UUID id;
 
-    @OneToOne(cascade = CascadeType.ALL)
+    @ManyToOne(cascade = CascadeType.PERSIST)
     @JoinColumn(name = "game_field_id")
     private GameFieldEntity gameField;
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
-    public GameFieldEntity getGameField() { return gameField; }
-    public void setGameField(GameFieldEntity gameField) { this.gameField = gameField; }
+    @Column(name = "state")
+    private String state;
+
+    @Column(name = "game_mode")
+    private String gameMode;
+
+    @Column(name = "x_player")
+    private UUID xPlayer;
+
+    @Column(name = "o_player")
+    private UUID oPlayer;
+
+    @Column(name = "player_id")
+    private UUID playerId; // Добавляем поле
 }

@@ -11,7 +11,19 @@
 <header class="header">
     <div class="header-container">
         <h1 class="header-title">Крестики-Нолики</h1>
-        <div id="user-login" class="user-login"></div>
+        <div class="header-controls">
+            <div id="user-login" class="user-login"></div>
+            <div id="game-controls" class="game-controls" style="display: none;">
+                <button id="newGameBtn" class="header-btn">Новая игра</button>
+                <button id="availableGamesBtn" class="header-btn">Доступные игры</button>
+                <div class="join-game">
+                    <input type="text" id="gameIdInput" placeholder="ID игры" class="input-field small">
+                    <button id="joinGameBtn" class="header-btn">Подключиться</button>
+                </div>
+                <button id="userInfoBtn" class="header-btn">Мой профиль</button>
+                <button id="logoutBtn" class="header-btn logout">Выйти</button>
+            </div>
+        </div>
         <button class="menu-toggle">☰</button>
     </div>
 </header>
@@ -32,6 +44,7 @@
     <!-- Игровое поле -->
     <section id="game-section" class="game-section" style="display: none;">
         <div id="status" class="game-status">Нажмите "Новая игра" для начала</div>
+        <div id="player-info" class="player-info"></div>
         <div class="board">
             <div class="cell" data-x="0" data-y="0"></div>
             <div class="cell" data-x="0" data-y="1"></div>
@@ -43,13 +56,37 @@
             <div class="cell" data-x="2" data-y="1"></div>
             <div class="cell" data-x="2" data-y="2"></div>
         </div>
-        <div class="game-controls">
-            <button id="newGameBtn" class="game-btn">Новая игра</button>
-            <button id="logoutBtn" class="game-btn logout">Выйти</button>
-        </div>
     </section>
 
-    <!-- Всплывающее окно -->
+    <!-- Модальное окно для выбора режима -->
+    <div id="mode-modal" class="modal">
+        <div class="modal-content">
+            <h2>Выберите режим игры</h2>
+            <button id="humanModeBtn" class="modal-btn">Игра с человеком</button>
+            <button id="computerModeBtn" class="modal-btn">Игра с компьютером</button>
+            <button id="modeCloseBtn" class="modal-btn cancel">Отмена</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно для доступных игр -->
+    <div id="available-games-modal" class="modal">
+        <div class="modal-content">
+            <h2>Доступные игры</h2>
+            <div id="available-games-list" class="games-list"></div>
+            <button id="availableGamesCloseBtn" class="modal-btn cancel">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно для профиля -->
+    <div id="user-info-modal" class="modal">
+        <div class="modal-content">
+            <h2>Профиль пользователя</h2>
+            <div id="user-info-content" class="user-info-content"></div>
+            <button id="userInfoCloseBtn" class="modal-btn cancel">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- Всплывающее уведомление -->
     <div id="notification" class="notification">
         <p id="notification-text"></p>
         <button id="notification-close" class="notification-close">Закрыть</button>
