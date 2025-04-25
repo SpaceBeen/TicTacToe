@@ -1,81 +1,104 @@
 package org.example.domain.service;
 
+import io.jsonwebtoken.Claims;
 import org.example.domain.model.User;
-import org.example.web.model.SignUpRequest;
+import org.example.web.model.request.JwtRequest;
+import org.example.web.model.response.JwtResponse;
+import org.example.web.model.request.SignUpRequest;
+import org.example.web.provider.JwtProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-
-import java.util.Base64;
-import java.util.UUID;
 
 @Service
 public class AuthorisationService {
     private final UserService userService;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+    private final JwtProvider jwtProvider;
 
     @Autowired
-    public AuthorisationService(UserService userService, BCryptPasswordEncoder passwordEncoder) {
+    public AuthorisationService(UserService userService, AuthenticationManager authenticationManager,
+                                JwtProvider jwtProvider) {
         this.userService = userService;
-        this.passwordEncoder = passwordEncoder;
+        this.authenticationManager = authenticationManager;
+        this.jwtProvider = jwtProvider;
     }
 
     public boolean register(SignUpRequest request) {
-        System.out.println("Регистрация: логин = [" + request.getLogin() + "], пароль = [" + request.getPassword() + "]");
-        if (request.getLogin() == null || request.getPassword() == null) {
-            System.out.println("Ошибка: логин или пароль равны null");
+        if (request == null || request.getLogin() == null || request.getPassword() == null) {
             return false;
         }
         if (request.getLogin().length() < 3 || request.getPassword().length() < 6) {
-            System.out.println("Ошибка: логин или пароль слишком короткие");
             return false;
         }
-        boolean success = userService.registerUser(new User(request.getLogin(), request.getPassword())); // Передаём нехешированный пароль
-        System.out.println("Результат регистрации: " + success);
-        return success;
+        return userService.registerUser(new User(request.getLogin(), request.getPassword()));
     }
 
-    public UUID authorise(String authHeader) {
-        System.out.println("Получен заголовок: [" + authHeader + "]");
-        if (authHeader == null || !authHeader.startsWith("Basic ")) {
-            System.out.println("Ошибка: неверный формат заголовка");
-            return null;
+    public JwtResponse login(JwtRequest request) {
+        if (request == null || request.getLogin() == null || request.getPassword() == null) {
+            throw new IllegalArgumentException("Invalid login request");
         }
 
-        String base64Credentials = authHeader.substring("Basic ".length()).trim();
-        System.out.println("Base64 строка: " + base64Credentials);
-        String credentials;
         try {
-            credentials = new String(Base64.getDecoder().decode(base64Credentials));
-            System.out.println("Декодированные данные: " + credentials);
-        } catch (IllegalArgumentException e) {
-            System.out.println("Ошибка декодирования Base64: " + e.getMessage());
-            return null;
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(request.getLogin(), request.getPassword());
+            Authentication authentication = authenticationManager.authenticate(authToken);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        } catch (AuthenticationException e) {
+            throw new RuntimeException("Invalid login or password", e);
         }
 
-        String[] parts = credentials.split(":", 2);
-        if (parts.length != 2) {
-            System.out.println("Ошибка: неверный формат логина и пароля");
-            return null;
-        }
-
-        String login = parts[0];
-        String password = parts[1];
-        User user = userService.findByLogin(login);
+        User user = userService.findByLogin(request.getLogin());
         if (user == null) {
-            System.out.println("Пользователь с логином " + login + " не найден");
-            return null;
+            throw new RuntimeException("User not found");
         }
 
-        System.out.println("Хэш пароля в базе: " + user.getPassword());
-        boolean passwordMatch = passwordEncoder.matches(password, user.getPassword());
-        System.out.println("Пароль совпадает: " + passwordMatch);
-        if (passwordMatch) {
-            System.out.println("Авторизация успешна, UUID: " + user.getId());
-            return user.getId();
-        } else {
-            System.out.println("Неверный пароль");
-            return null;
+        String accessToken = jwtProvider.generateAccessToken(user);
+        String refreshToken = jwtProvider.generateRefreshToken(user);
+
+        return new JwtResponse("Bearer", accessToken, refreshToken);
+    }
+
+    public JwtResponse refreshAccessToken(String refreshToken) {
+        if (refreshToken == null || !jwtProvider.validateRefreshToken(refreshToken)) {
+            throw new RuntimeException("Invalid refresh token");
         }
+
+        Claims claims = jwtProvider.getClaims(refreshToken);
+        User user = userService.findByLogin(claims.getSubject());
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+
+        String newAccessToken = jwtProvider.generateAccessToken(user);
+        return new JwtResponse("Bearer", newAccessToken, refreshToken);
+    }
+
+    public JwtResponse refreshRefreshToken(String refreshToken) {
+        if (refreshToken == null || !jwtProvider.validateRefreshToken(refreshToken)) {
+            throw new RuntimeException("Invalid refresh token");
+        }
+
+        Claims claims = jwtProvider.getClaims(refreshToken);
+        User user = userService.findByLogin(claims.getSubject());
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+
+        String newAccessToken = jwtProvider.generateAccessToken(user);
+        String newRefreshToken = jwtProvider.generateRefreshToken(user);
+        return new JwtResponse("Bearer", newAccessToken, newRefreshToken);
+    }
+
+    public JwtAuthentication getJwtAuthentication() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof JwtAuthentication) {
+            return (JwtAuthentication) auth;
+        }
+        return null; // Или выбросить исключение, если требуется
     }
 }

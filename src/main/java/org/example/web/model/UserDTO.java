@@ -1,28 +1,26 @@
 package org.example.web.model;
 
+import lombok.Data;
+import org.example.domain.model.Role;
+
+import java.util.List;
 import java.util.UUID;
 
+@Data
 public class UserDTO {
     private UUID id;
     private String login;
     private Integer rating;
-    private UUID currentGameId; // Добавляем поле
+    private UUID currentGameId;
+    private List<Role> roles;
 
     public UserDTO() {}
 
-    public UserDTO(UUID id, String login, Integer rating, UUID currentGameId) {
+    public UserDTO(UUID id, String login, Integer rating, UUID currentGameId, List<Role> roles) {
         this.id = id;
         this.login = login;
         this.rating = rating;
         this.currentGameId = currentGameId;
+        this.roles = roles;
     }
-
-    public UUID getId() { return id; }
-    public void setId(UUID id) { this.id = id; }
-    public String getLogin() { return login; }
-    public void setLogin(String login) { this.login = login; }
-    public Integer getRating() { return rating; }
-    public void setRating(Integer rating) { this.rating = rating; }
-    public UUID getCurrentGameId() { return currentGameId; }
-    public void setCurrentGameId(UUID currentGameId) { this.currentGameId = currentGameId; }
 }

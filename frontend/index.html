@@ -12,10 +12,15 @@
     <div class="header-container">
         <h1 class="header-title">Крестики-Нолики</h1>
         <div class="header-controls">
-            <div id="user-login" class="user-login"></div>
+            <div class="user-info">
+                <span id="user-login" class="user-login"></span>
+                <span id="user-rating" class="user-rating"></span>
+            </div>
             <div id="game-controls" class="game-controls" style="display: none;">
                 <button id="newGameBtn" class="header-btn">Новая игра</button>
                 <button id="availableGamesBtn" class="header-btn">Доступные игры</button>
+                <button id="completedGamesBtn" class="header-btn">Завершённые игры</button>
+                <button id="leaderboardBtn" class="header-btn">Топ игроков</button>
                 <div class="join-game">
                     <input type="text" id="gameIdInput" placeholder="ID игры" class="input-field small">
                     <button id="joinGameBtn" class="header-btn">Подключиться</button>
@@ -58,7 +63,7 @@
         </div>
     </section>
 
-    <!-- Модальное окно для выбора режима -->
+    <!-- Модальные окна -->
     <div id="mode-modal" class="modal">
         <div class="modal-content">
             <h2>Выберите режим игры</h2>
@@ -68,7 +73,14 @@
         </div>
     </div>
 
-    <!-- Модальное окно для доступных игр -->
+    <div id="completed-games-modal" class="modal">
+        <div class="modal-content">
+            <h2>Завершённые игры</h2>
+            <div id="completed-games-list" class="games-list"></div>
+            <button id="completedGamesCloseBtn" class="modal-btn cancel">Закрыть</button>
+        </div>
+    </div>
+
     <div id="available-games-modal" class="modal">
         <div class="modal-content">
             <h2>Доступные игры</h2>
@@ -77,12 +89,19 @@
         </div>
     </div>
 
-    <!-- Модальное окно для профиля -->
     <div id="user-info-modal" class="modal">
         <div class="modal-content">
             <h2>Профиль пользователя</h2>
             <div id="user-info-content" class="user-info-content"></div>
             <button id="userInfoCloseBtn" class="modal-btn cancel">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="leaderboard-modal" class="modal">
+        <div class="modal-content">
+            <h2>Топ игроков</h2>
+            <div id="leaderboard-list" class="games-list"></div>
+            <button id="leaderboardCloseBtn" class="modal-btn cancel">Закрыть</button>
         </div>
     </div>
 

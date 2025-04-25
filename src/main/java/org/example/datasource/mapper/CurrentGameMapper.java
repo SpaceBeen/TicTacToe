@@ -10,6 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.sql.Date;
+
 @Component
 public class CurrentGameMapper {
     private static final Logger log = LoggerFactory.getLogger(CurrentGameMapper.class);
@@ -44,6 +46,7 @@ public class CurrentGameMapper {
         entity.setXPlayer(game.getXPlayer());
         entity.setOPlayer(game.getOPlayer());
         entity.setPlayerId(game.getPlayerId());
+        entity.setDateOfCreation((Date) game.getDateOfCreation());
         return entity;
     }
 
@@ -60,13 +63,12 @@ public class CurrentGameMapper {
             fieldData = "0 0 0\n0 0 0\n0 0 0";
         }
         game.getGameField().setField(fieldMapper.toDomainFormat(fieldData));
-
         game.setState(GameStatus.fromDisplayName(entity.getState()));
-        game.setPlayerId(entity.getXPlayer());
+        game.setPlayerId(entity.getPlayerId());
         game.setGameMode(entity.getGameMode() != null ? GameMode.fromDisplayName(entity.getGameMode()) : null);
         game.setXPlayer(entity.getXPlayer());
         game.setOPlayer(entity.getOPlayer());
-        game.setPlayerId(entity.getPlayerId());
+        game.setDateOfCreation(entity.getDateOfCreation());
         return game;
     }
 }

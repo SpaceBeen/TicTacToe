@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const authSection = document.getElementById('auth-section');
     const gameControls = document.getElementById('game-controls');
     const userLogin = document.getElementById('user-login');
+    const userRating = document.getElementById('user-rating');
     const notification = document.getElementById('notification');
     const notificationText = document.getElementById('notification-text');
     const notificationClose = document.getElementById('notification-close');
@@ -39,41 +40,59 @@ document.addEventListener('DOMContentLoaded', () => {
     const userInfoModal = document.getElementById('user-info-modal');
     const userInfoContent = document.getElementById('user-info-content');
     const userInfoCloseBtn = document.getElementById('userInfoCloseBtn');
+    const completedGamesBtn = document.getElementById('completedGamesBtn');
+    const completedGamesModal = document.getElementById('completed-games-modal');
+    const completedGamesList = document.getElementById('completed-games-list');
+    const completedGamesCloseBtn = document.getElementById('completedGamesCloseBtn');
+    const leaderboardBtn = document.getElementById('leaderboardBtn');
+    const leaderboardCloseBtn = document.getElementById('leaderboardCloseBtn');
 
-    // Проверка авторизации и восстановление игры
+
+
+    // Получение заголовка авторизации
+    function getAuthHeader() {
+        const token = localStorage.getItem('accessToken');
+        return token ? `Bearer ${token}` : null;
+    }
+
+    // Запуск polling для обновления состояния игры
+    function startPolling() {
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(fetchGameState, 2000);
+        console.log(`Started polling for game ${currentGameId}`);
+    }
+
+    // Остановка polling
+    function stopPolling() {
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = null;
+        console.log(`Stopped polling for game ${currentGameId}`);
+    }
+
+    // Проверка авторизации
     async function checkAuth() {
-        const username = localStorage.getItem('username');
-        const password = localStorage.getItem('password');
-        const storedUserId = localStorage.getItem('userId');
-        currentGameId = localStorage.getItem('currentGameId');
-
-        if (username && password && storedUserId) {
-            userId = storedUserId;
-            authSection.style.display = 'none';
-            gameSection.style.display = 'block';
-            gameControls.style.display = 'flex';
-            userLogin.textContent = `Игрок: ${username}`;
-            status.textContent = 'Загрузка...';
-            console.log('Found stored session for user:', userId);
-            // Проверяем данные пользователя и восстанавливаем игру
+        const token = localStorage.getItem('accessToken');
+        if (token) {
             const userInfoFetched = await fetchUserInfo();
-            if (!userInfoFetched) {
-                console.warn('Failed to fetch user info, showing auth section');
+            if (userInfoFetched) {
+                authSection.style.display = 'none';
+                gameSection.style.display = 'block';
+                gameControls.style.display = 'flex';
+                status.textContent = 'Нажмите "Новая игра" для начала';
+            } else {
+                localStorage.removeItem('accessToken');
                 authSection.style.display = 'block';
                 gameSection.style.display = 'none';
                 gameControls.style.display = 'none';
                 userLogin.textContent = '';
-                localStorage.clear();
-                status.textContent = 'Пожалуйста, войдите';
+                userRating.textContent = '';
             }
         } else {
-            console.log('No stored session, showing auth section');
             authSection.style.display = 'block';
             gameSection.style.display = 'none';
             gameControls.style.display = 'none';
             userLogin.textContent = '';
-            localStorage.clear();
-            status.textContent = 'Пожалуйста, войдите';
+            userRating.textContent = '';
         }
     }
 
@@ -118,85 +137,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }, duration);
     }
 
-    // Проверка победителя на основе игрового поля
-    function checkWinnerFromBoard(board) {
-        // Проверка строк
-        for (let i = 0; i < 3; i++) {
-            if (board[i][0] === board[i][1] && board[i][1] === board[i][2] && board[i][0] !== 0) {
-                return board[i][0] === 1 ? 'X' : 'O';
-            }
-        }
-        // Проверка столбцов
-        for (let j = 0; j < 3; j++) {
-            if (board[0][j] === board[1][j] && board[1][j] === board[2][j] && board[0][j] !== 0) {
-                return board[0][j] === 1 ? 'X' : 'O';
-            }
-        }
-        // Проверка диагоналей
-        if (board[0][0] === board[1][1] && board[1][1] === board[2][2] && board[0][0] !== 0) {
-            return board[0][0] === 1 ? 'X' : 'O';
-        }
-        if (board[0][2] === board[1][1] && board[1][1] === board[2][0] && board[0][2] !== 0) {
-            return board[0][2] === 1 ? 'X' : 'O';
-        }
-        return null;
-    }
-
     // Проверка окончания игры и управление клетками
-    function checkGameEnd(gameState, board) {
+    function checkGameEnd(gameState) {
         const { status: gameStatus, mode, symbols, playerId } = gameState;
+        console.log('checkGameEnd:', { gameStatus, mode, playerId, userId, symbols });
 
-        // Определяем символ текущего хода
-        let currentPlayerSymbol = playerId === symbols.xPlayerId ? 'X' : playerId === symbols.oPlayerId ? 'O' : null;
+        // Определяем символ текущего игрока
+        let currentPlayerSymbol = null;
+        if (playerId === symbols.xPlayerId) {
+            currentPlayerSymbol = 'X';
+        } else if (playerId === symbols.oPlayerId) {
+            currentPlayerSymbol = 'O';
+        }
 
-        if (gameStatus.includes('Победа')) {
-            // Проверяем победителя по playerId
-            let winnerSymbol;
-            if (playerId === symbols.xPlayerId) {
-                winnerSymbol = 'X';
-            } else if (playerId === symbols.oPlayerId) {
-                winnerSymbol = 'O';
-            } else {
-                // Если playerId не указывает на игрока, проверяем игровое поле
-                winnerSymbol = checkWinnerFromBoard(board);
-                if (!winnerSymbol) {
-                    console.warn('Could not determine winner from board or playerId:', { playerId, symbols, board });
-                    winnerSymbol = 'X'; // Fallback, чтобы избежать пустого статуса
-                }
-            }
-            status.textContent = `Выиграли ${winnerSymbol}`;
+        if (gameStatus.includes('Ничья') || gameStatus.includes('Победа')) {
+            status.textContent = gameStatus;
             cells.forEach(cell => cell.classList.add('disabled'));
             currentGameId = null;
             playerSymbol = null;
-            localStorage.removeItem('currentGameId');
-            stopGameStatePolling();
-            showNotification(`Игра завершена: Выиграли ${winnerSymbol}`);
-        } else if (gameStatus.includes('Ничья')) {
-            status.textContent = 'Ничья';
-            cells.forEach(cell => cell.classList.add('disabled'));
-            currentGameId = null;
-            playerSymbol = null;
-            localStorage.removeItem('currentGameId');
-            stopGameStatePolling();
-            showNotification('Игра завершена: Ничья');
+            stopPolling();
+            console.log('Game ended, polling stopped');
         } else if (gameStatus === 'Ожидание игроков') {
             status.textContent = 'Ожидание второго игрока';
             cells.forEach(cell => cell.classList.add('disabled'));
-            startGameStatePolling();
+            startPolling();
+            console.log('Waiting for players, polling started');
         } else {
-            // Показываем, чей ход
             status.textContent = currentPlayerSymbol ? `Ход игрока ${currentPlayerSymbol}` : gameStatus;
+            console.log(`Current turn: playerId=${playerId}, userId=${userId}, isUserTurn=${playerId === userId}`);
 
-            // Активируем клетки только для игрока, чей ход
-            if (mode === 'human' && playerId === userId) {
-                cells.forEach(cell => {
-                    if (!cell.textContent) {
-                        cell.classList.remove('disabled');
-                    } else {
-                        cell.classList.add('disabled');
-                    }
-                });
-            } else if (mode === 'computer' && playerId === userId) {
+            // Активируем клетки, если ход текущего пользователя
+            if (playerId === userId) {
+                console.log('Enabling cells for user', userId);
                 cells.forEach(cell => {
                     if (!cell.textContent) {
                         cell.classList.remove('disabled');
@@ -205,518 +177,497 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             } else {
+                console.log('Disabling cells, not user turn');
                 cells.forEach(cell => cell.classList.add('disabled'));
             }
-            startGameStatePolling();
+            startPolling();
         }
         renderPlayerInfo(symbols, mode);
     }
 
-    // Создание Basic Auth заголовка
-    function createBasicAuthHeader(username, password) {
-        if (!username || !password) {
-            console.error('Missing username or password for Basic Auth');
-            return null;
-        }
-        const credentials = `${username}:${password}`;
-        const encodedCredentials = btoa(credentials);
-        console.log('Basic Auth Header created:', `Basic ${encodedCredentials}`);
-        return `Basic ${encodedCredentials}`;
-    }
-
     // Авторизация
     async function login(username, password) {
-        const authHeader = createBasicAuthHeader(username, password);
-        if (!authHeader) {
-            authStatus.textContent = 'Ошибка: Логин и пароль не могут быть пустыми';
-            return;
-        }
         try {
-            console.log('Sending login request with header:', authHeader);
             const response = await fetch(`${AUTH_URL}/login`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': authHeader
-                }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ login: username, password })
             });
-            const data = await response.json();
-            if (response.ok) {
-                console.log('Login response:', data);
-                localStorage.setItem('username', username);
-                localStorage.setItem('password', password);
-                const userInfoFetched = await fetchUserInfo();
-                if (!userInfoFetched) {
-                    authStatus.textContent = 'Ошибка: Не удалось получить данные пользователя';
-                    localStorage.clear();
-                    return;
-                }
-                authSection.style.display = 'none';
-                gameSection.style.display = 'block';
-                gameControls.style.display = 'flex';
-                userLogin.textContent = `Игрок: ${username}`;
-                authStatus.textContent = '';
-                loginInput.value = '';
-                passwordInput.value = '';
-                showNotification('Вход успешен!');
-            } else {
-                authStatus.textContent = `Ошибка входа: ${data.error || 'Неизвестная ошибка'}`;
-                console.error('Login failed:', data.error);
-                showNotification(`Ошибка входа: ${data.error || 'Неизвестная ошибка'}`);
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Ошибка авторизации');
             }
+            const data = await response.json();
+            localStorage.setItem('accessToken', data.accessToken);
+            authStatus.textContent = '';
+            loginInput.value = '';
+            passwordInput.value = '';
+            await fetchUserInfo();
+            authSection.style.display = 'none';
+            gameSection.style.display = 'block';
+            gameControls.style.display = 'flex';
+            showNotification('Вход успешен!');
         } catch (error) {
-            authStatus.textContent = 'Ошибка сети';
-            console.error('Login error:', error);
-            showNotification('Ошибка сети');
+            authStatus.textContent = `Ошибка: ${error.message}`;
+            showNotification(`Ошибка: ${error.message}`);
         }
     }
 
     // Регистрация
     async function register(username, password) {
-        const authHeader = createBasicAuthHeader(username, password);
-        if (!authHeader) {
-            authStatus.textContent = 'Ошибка: Логин и пароль не могут быть пустыми';
-            return;
-        }
         try {
-            console.log('Sending register request with header:', authHeader);
             const response = await fetch(`${AUTH_URL}/signup`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': authHeader,
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ login: username, password })
             });
-            const data = await response.json();
-            if (response.ok) {
-                showNotification('Регистрация успешна! Выполняется вход...');
-                await login(username, password);
-            } else {
-                authStatus.textContent = `Ошибка регистрации: ${data.error || 'Неизвестная ошибка'}`;
-                console.error('Register failed:', data.error);
-                showNotification(`Ошибка регистрации: ${data.error || 'Неизвестная ошибка'}`);
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Ошибка регистрации');
             }
+            showNotification('Регистрация успешна! Выполняется вход...');
+            await login(username, password);
         } catch (error) {
-            authStatus.textContent = 'Ошибка сети';
-            console.error('Register error:', error);
-            showNotification('Ошибка сети');
+            authStatus.textContent = `Ошибка: ${error.message}`;
+            showNotification(`Ошибка: ${error.message}`);
         }
     }
 
     // Получение информации о пользователе
     async function fetchUserInfo() {
-        const username = localStorage.getItem('username');
-        const password = localStorage.getItem('password');
-        const authHeader = createBasicAuthHeader(username, password);
-        if (!authHeader) {
-            showNotification('Ошибка: Необходима авторизация');
-            return false;
-        }
         try {
-            console.log('Fetching current user info with header:', authHeader);
             const response = await fetch(`${USER_URL}/me`, {
                 method: 'GET',
-                headers: { 'Authorization': authHeader }
+                headers: { 'Authorization': getAuthHeader() }
             });
             if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Fetch user info failed:', errorData.error || response.statusText);
-                showNotification(`Ошибка получения профиля: ${errorData.error || response.statusText}`);
-                return false;
+                const error = await response.json();
+                throw new Error(error.error || 'Не удалось получить данные пользователя');
             }
             const data = await response.json();
             userId = data.id;
-            localStorage.setItem('userId', userId);
-            localStorage.setItem('currentGameId', data.currentGameId);
+            userLogin.textContent = data.login;
+            userRating.textContent = `Рейтинг: ${data.rating || 0}`;
             userInfoContent.innerHTML = `
-                <p>ID: ${data.id}</p>
-                <p>Логин: ${data.login}</p>
-                <p>Рейтинг: ${data.rating}</p>
-            `;
-            console.log('User info fetched, userId set to:', userId);
+<p>ID: ${data.id}</p>
+<p>Логин: ${data.login}</p>
+<p>Рейтинг: ${data.rating}</p>
+    `;
             if (data.currentGameId) {
                 currentGameId = data.currentGameId;
-                console.log(`Restoring game ${currentGameId} for user ${userId}`);
-                await fetchGameState();
+                await joinGame(currentGameId);
             } else {
                 status.textContent = 'Нажмите "Новая игра" для начала';
             }
             return true;
         } catch (error) {
-            console.error('Fetch user info error:', error);
-            showNotification('Ошибка сети при получении профиля');
+            showNotification(`Ошибка: ${error.message}`);
             return false;
         }
     }
 
     // Создание новой игры
     async function startNewGame(mode) {
-        const username = localStorage.getItem('username');
-        const password = localStorage.getItem('password');
-        const authHeader = createBasicAuthHeader(username, password);
-
-        if (!authHeader) {
+        if (!getAuthHeader()) {
             showNotification('Пожалуйста, авторизуйтесь!');
             authSection.style.display = 'block';
             gameSection.style.display = 'none';
             gameControls.style.display = 'none';
             return;
         }
-
         try {
-            console.log(`Creating new game with mode: ${mode}`);
             const response = await fetch(`${API_URL}/new`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': authHeader,
+                    'Authorization': getAuthHeader(),
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ mode })
             });
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Не удалось создать игру');
+            }
             const data = await response.json();
-            console.log('New game response:', data);
-
-            if (response.ok) {
-                if (!data.id) {
-                    throw new Error('Game ID not provided in response');
-                }
-                currentGameId = data.id;
-                localStorage.setItem('currentGameId', currentGameId);
-                playerSymbol = data.xPlayer === userId ? 'X' : (data.oPlayer === userId ? 'O' : 'X');
-                showNotification(`Игра создана! ID: ${data.id}, Режим: ${mode === 'human' ? 'с человеком' : 'с компьютером'}`);
-
-                if (mode === 'computer') {
-                    console.log('Fetching game state for computer mode');
-                    await fetchGameState();
-                } else {
-                    console.log('Joining game in human mode');
-                    await joinGame(data.id);
-                }
+            if (!data.id) {
+                throw new Error('Game ID not provided in response');
+            }
+            currentGameId = data.id;
+            playerSymbol = data.xPlayer === userId ? 'X' : (data.oPlayer === userId ? 'O' : 'X');
+            showNotification(`Игра создана! ID: ${data.id}, Режим: ${mode === 'human' ? 'с человеком' : 'с компьютером'}`);
+            if (mode === 'computer') {
+                await fetchGameState();
             } else {
-                const errorMsg = data.error || 'Неизвестная ошибка';
-                showNotification(`Ошибка создания игры: ${errorMsg}`);
-                console.error('New game failed:', errorMsg);
+                await joinGame(data.id);
             }
         } catch (error) {
             showNotification(`Ошибка создания игры: ${error.message}`);
-            console.error('Start new game error:', error);
         }
     }
 
     // Подключение к игре
     async function joinGame(gameId) {
-        const username = localStorage.getItem('username');
-        const password = localStorage.getItem('password');
-        const authHeader = createBasicAuthHeader(username, password);
-
-        if (!authHeader) {
+        if (!getAuthHeader()) {
             showNotification('Пожалуйста, авторизуйтесь!');
             return;
         }
-
         const idToJoin = gameId || gameIdInput.value.trim();
         if (!idToJoin) {
             showNotification('Введите ID игры или создайте новую!');
             return;
         }
-
-        if (!userId) {
-            console.warn('userId is not set, attempting to fetch user info');
-            const userInfoFetched = await fetchUserInfo();
-            if (!userInfoFetched) {
-                showNotification('Ошибка: ID пользователя не определён');
-                return;
-            }
-        }
-
         try {
-            console.log(`Joining game ${idToJoin} with userId: ${userId}`);
             const response = await fetch(`${API_URL}/${idToJoin}/join`, {
-                method: 'POST',
-                headers: { 'Authorization': authHeader }
+method: 'POST',
+    headers: { 'Authorization': getAuthHeader() }
+});
+if (!response.ok) {
+    const error = await response.json();
+    if (error.error.includes('Пользователь уже участвует')) {
+        currentGameId = idToJoin;
+        await fetchGameState();
+        showNotification(`Вы уже в игре ${idToJoin}`);
+        startPolling();
+        return;
+    }
+    throw new Error(error.error || 'Не удалось подключиться к игре');
+}
+const data = await response.json();
+currentGameId = idToJoin;
+playerSymbol = data.xPlayer === userId ? 'X' : (data.oPlayer === userId ? 'O' : 'X');
+gameIdInput.value = '';
+const gameBoard = data.gameBoard || [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+renderBoard(gameBoard);
+checkGameEnd({
+    status: data.status || 'Ожидание игроков',
+    mode: data.mode === 'Игра с человеком' ? 'human' : 'computer',
+    symbols: {
+        [data.xPlayer]: 'X',
+        [data.oPlayer]: 'O',
+        xPlayerId: data.xPlayer,
+        oPlayerId: data.oPlayer
+    },
+    playerId: data.playerId
+});
+showNotification(`Подключено к игре ${idToJoin}`);
+startPolling();
+} catch (error) {
+    showNotification(`Ошибка подключения: ${error.message}`);
+}
+}
+
+// Получение состояния игры
+async function fetchGameState() {
+    if (!getAuthHeader() || !currentGameId) return;
+    try {
+        console.log(`Fetching game state for game ${currentGameId}`);
+        const response = await fetch(`${API_URL}/${currentGameId}`, {
+            method: 'GET',
+            headers: { 'Authorization': getAuthHeader() }
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Не удалось получить состояние игры');
+        }
+        const data = await response.json();
+        console.log('Game state received:', data);
+        const gameBoard = data.gameBoard || [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+        renderBoard(gameBoard);
+        checkGameEnd({
+            status: data.status || 'Ожидание хода',
+            mode: data.mode === 'Игра с человеком' ? 'human' : 'computer',
+            symbols: {
+                [data.xPlayer]: 'X',
+                [data.oPlayer]: 'O',
+                xPlayerId: data.xPlayer,
+                oPlayerId: data.oPlayer
+            },
+            playerId: data.playerId
+        });
+    } catch (error) {
+        console.error('Fetch game state error:', error.message);
+        showNotification(`Ошибка получения игры: ${error.message}`);
+        stopPolling();
+    }
+}
+
+// Ход в игре
+async function makeMove(x, y) {
+    if (!getAuthHeader() || !currentGameId) {
+        showNotification('Подключитесь к игре!');
+        return;
+    }
+    try {
+        console.log(`Making move in game ${currentGameId} at [${x}, ${y}]`);
+        stopPolling();
+        const response = await fetch(`${API_URL}/${currentGameId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': getAuthHeader(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ move: [x, y] })
+        });
+        const data = await response.json();
+        console.log('Move response:', data);
+        if (!response.ok) {
+            throw new Error(data.error || 'Ошибка хода');
+        }
+        const gameBoard = data.gameBoard || [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+        renderBoard(gameBoard);
+        checkGameEnd({
+            status: data.status || 'Ожидание хода',
+            mode: data.mode === 'Игра с человеком' ? 'human' : 'computer',
+            symbols: {
+                [data.xPlayer]: 'X',
+                [data.oPlayer]: 'O',
+                xPlayerId: data.xPlayer,
+                oPlayerId: data.oPlayer
+            },
+            playerId: data.playerId
+        });
+        console.log('Move successful, restarting polling');
+        startPolling();
+    } catch (error) {
+        console.error('Make move error:', error.message);
+        showNotification(`Ошибка хода: ${error.message}`);
+        startPolling();
+    }
+}
+
+// Получение доступных игр
+async function fetchAvailableGames() {
+    if (!getAuthHeader()) {
+        showNotification('Пожалуйста, авторизуйтесь!');
+        return;
+    }
+    try {
+        const response = await fetch(`${API_URL}/available`, {
+            method: 'GET',
+            headers: { 'Authorization': getAuthHeader() }
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Не удалось получить доступные игры');
+        }
+        const data = await response.json();
+        availableGamesList.innerHTML = '';
+        if (data.length === 0) {
+            availableGamesList.innerHTML = '<p>Нет доступных игр</p>';
+        } else {
+            data.forEach(game => {
+                const gameItem = document.createElement('div');
+                gameItem.className = 'game-item';
+                gameItem.textContent = `Игра ${game.id}`;
+                gameItem.addEventListener('click', () => {
+                    availableGamesModal.classList.remove('active');
+                    joinGame(game.id);
+                });
+                availableGamesList.appendChild(gameItem);
             });
-
-            console.log('Response status:', response.status);
-            const data = await response.json();
-            console.log('Response data:', data);
-
-            if (response.ok) {
-                currentGameId = idToJoin;
-                localStorage.setItem('currentGameId', currentGameId);
-                playerSymbol = data.xPlayer === userId ? 'X' : (data.oPlayer === userId ? 'O' : 'X');
-                gameIdInput.value = '';
-                const gameBoard = data.gameBoard || [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-                renderBoard(gameBoard);
-                checkGameEnd({
-                    status: data.status || 'Ожидание игроков',
-                    mode: data.mode === 'Игра с человеком' ? 'human' : 'computer',
-                    symbols: {
-                        [data.xPlayer]: 'X',
-                        [data.oPlayer]: 'O',
-                        xPlayerId: data.xPlayer,
-                        oPlayerId: data.oPlayer
-                    },
-                    playerId: data.playerId
-                }, gameBoard);
-            } else {
-                const errorMsg = data.error || 'Неизвестная ошибка';
-                console.error('Join game failed:', errorMsg);
-                if (errorMsg.includes('Пользователь уже участвует')) {
-                    currentGameId = idToJoin;
-                    localStorage.setItem('currentGameId', currentGameId);
-                    await fetchGameState();
-                    showNotification(`Вы уже в игре ${idToJoin}`);
-                } else {
-                    showNotification(`Ошибка подключения: ${errorMsg}`);
-                }
-            }
-        } catch (error) {
-            console.error('Join game error:', error);
-            showNotification('Ошибка подключения к игре: ' + error.message);
         }
+        availableGamesModal.classList.add('active');
+    } catch (error) {
+        showNotification(`Ошибка: ${error.message}`);
     }
+}
 
-    // Получение состояния игры
-    async function fetchGameState() {
-        const username = localStorage.getItem('username');
-        const password = localStorage.getItem('password');
-        const authHeader = createBasicAuthHeader(username, password);
-        if (!authHeader || !currentGameId) {
-            showNotification('Подключитесь к игре!');
-            return;
-        }
-        try {
-            console.log(`Fetching game state for game ${currentGameId}`);
-            const response = await fetch(`${API_URL}/${currentGameId}`, {
-                method: 'GET',
-                headers: { 'Authorization': authHeader }
-            });
-            const data = await response.json();
-            console.log('Game state response:', data);
-            if (response.ok) {
-                const gameBoard = data.gameBoard || [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-                renderBoard(gameBoard);
-                checkGameEnd({
-                    status: data.status || 'Ожидание хода',
-                    mode: data.mode === 'Игра с человеком' ? 'human' : 'computer',
-                    symbols: {
-                        [data.xPlayer]: 'X',
-                        [data.oPlayer]: 'O',
-                        xPlayerId: data.xPlayer,
-                        oPlayerId: data.oPlayer
-                    },
-                    playerId: data.playerId
-                }, gameBoard);
-            } else {
-                showNotification(`Ошибка получения игры: ${data.error || 'Неизвестная ошибка'}`);
-                console.error('Fetch game state failed:', data.error);
-                localStorage.removeItem('currentGameId');
-                currentGameId = null;
-                status.textContent = 'Нажмите "Новая игра" для начала';
-            }
-        } catch (error) {
-            showNotification('Ошибка сети');
-            console.error('Fetch game state error:', error);
-            localStorage.removeItem('currentGameId');
-            currentGameId = null;
-            status.textContent = 'Нажмите "Новая игра" для начала';
-        }
+// События
+loginBtn.addEventListener('click', async () => {
+    const username = loginInput.value.trim();
+    const password = passwordInput.value.trim();
+    if (!username || !password) {
+        authStatus.textContent = 'Введите логин и пароль';
+        return;
     }
+    await login(username, password);
+});
 
-    // Периодический опрос состояния игры
-    function startGameStatePolling() {
-        if (pollingInterval) return;
-        console.log('Started game state polling');
-        pollingInterval = setInterval(async () => {
-            if (!currentGameId) {
-                stopGameStatePolling();
-                return;
-            }
-            await fetchGameState();
-        }, 1000);
+registerBtn.addEventListener('click', async () => {
+    const username = loginInput.value.trim();
+    const password = passwordInput.value.trim();
+    if (!username || !password) {
+        authStatus.textContent = 'Введите логин и пароль';
+        return;
     }
-
-    // Остановка опроса
-    function stopGameStatePolling() {
-        if (pollingInterval) {
-            clearInterval(pollingInterval);
-            pollingInterval = null;
-            console.log('Stopped game state polling');
-        }
-    }
-
-    // Ход в игре
-    async function makeMove(x, y) {
-        const username = localStorage.getItem('username');
-        const password = localStorage.getItem('password');
-        const authHeader = createBasicAuthHeader(username, password);
-        if (!authHeader || !currentGameId) {
-            showNotification('Подключитесь к игре!');
-            return;
-        }
-        try {
-            console.log(`Making move in game ${currentGameId} at (${x}, ${y})`);
-            const response = await fetch(`${API_URL}/${currentGameId}`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': authHeader,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ move: [x, y] })
-            });
-            const data = await response.json();
-            console.log('Move response:', data);
-            if (response.ok) {
-                const gameBoard = data.gameBoard || [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-                renderBoard(gameBoard);
-                checkGameEnd({
-                    status: data.status || 'Ожидание хода',
-                    mode: data.mode === 'Игра с человеком' ? 'human' : 'computer',
-                    symbols: {
-                        [data.xPlayer]: 'X',
-                        [data.oPlayer]: 'O',
-                        xPlayerId: data.xPlayer,
-                        oPlayerId: data.oPlayer
-                    },
-                    playerId: data.playerId
-                }, gameBoard);
-            } else {
-                showNotification(`Ошибка хода: ${data.error || 'Неизвестная ошибка'}`);
-                console.error('Move failed:', data.error);
-            }
-        } catch (error) {
-            showNotification('Ошибка сети при выполнении хода');
-            console.error('Make move error:', error);
-        }
-    }
-
-    // Получение доступных игр
-    async function fetchAvailableGames() {
-        const username = localStorage.getItem('username');
-        const password = localStorage.getItem('password');
-        const authHeader = createBasicAuthHeader(username, password);
-        if (!authHeader) {
+    await register(username, password);
+});
+    async function fetchCompletedGames() {
+        if (!getAuthHeader()) {
             showNotification('Пожалуйста, авторизуйтесь!');
             return;
         }
         try {
-            const response = await fetch(`${API_URL}/available`, {
+            const response = await fetch(`${USER_URL}/completedGames`, {
                 method: 'GET',
-                headers: { 'Authorization': authHeader }
+                headers: { 'Authorization': getAuthHeader() }
             });
-            const data = await response.json();
-            if (response.ok) {
-                availableGamesList.innerHTML = '';
-                if (data.length === 0) {
-                    availableGamesList.innerHTML = '<p>Нет доступных игр</p>';
-                } else {
-                    data.forEach(game => {
-                        const gameItem = document.createElement('div');
-                        gameItem.className = 'game-item';
-                        gameItem.textContent = `Игра ${game.id}`;
-                        gameItem.addEventListener('click', () => {
-                            availableGamesModal.classList.remove('active');
-                            joinGame(game.id);
-                        });
-                        availableGamesList.appendChild(gameItem);
-                    });
-                }
-                availableGamesModal.classList.add('active');
-            } else {
-                showNotification(`Ошибка получения игр: ${data.error || 'Неизвестная ошибка'}`);
-                console.error('Fetch available games failed:', data.error);
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Не удалось получить завершённые игры');
             }
+            const data = await response.json();
+            completedGamesList.innerHTML = '';
+            if (data.length === 0) {
+                completedGamesList.innerHTML = '<p>Нет завершённых игр</p>';
+            } else {
+                data.forEach(game => {
+                    const gameItem = document.createElement('div');
+                    gameItem.className = 'game-item';
+                    gameItem.innerHTML = `
+                    <p><strong>ID:</strong> ${game.id}</p>
+                    <p><strong>Дата:</strong> ${game.dateOfCreation}</p>
+                    <p><strong>Состояние:</strong> ${game.status}</p>
+                    <p><strong>Победитель:</strong> ${game.playerId || 'Ничья'}</p>
+                `;
+                    completedGamesList.appendChild(gameItem);
+                });
+            }
+            completedGamesModal.classList.add('active');
         } catch (error) {
-            showNotification('Ошибка сети');
-            console.error('Fetch available games error:', error);
+            showNotification(`Ошибка: ${error.message}`);
         }
     }
 
-    // События
-    loginBtn.addEventListener('click', async () => {
-        const username = loginInput.value.trim();
-        const password = passwordInput.value.trim();
-        if (!username || !password) {
-            authStatus.textContent = 'Введите логин и пароль';
+    // Получение топа игроков
+    async function fetchLeaderboard() {
+        if (!getAuthHeader()) {
+            showNotification('Пожалуйста, авторизуйтесь!');
             return;
         }
-        await login(username, password);
-    });
+        try {
+            const response = await fetch(`${USER_URL}/topList?limit=10`, {
+                method: 'GET',
+                headers: { 'Authorization': getAuthHeader() }
+            });
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Не удалось получить топ игроков');
+            }
+            const data = await response.json();
+            renderLeaderboard(data);
+        } catch (error) {
+            showNotification(`Ошибка: ${error.message}`);
+        }
+    }
 
-    registerBtn.addEventListener('click', async () => {
-        const username = loginInput.value.trim();
-        const password = passwordInput.value.trim();
-        if (!username || !password) {
-            authStatus.textContent = 'Введите логин и пароль';
+// Отрисовка топа игроков
+    function renderLeaderboard(players) {
+        const leaderboardList = document.getElementById('leaderboard-list');
+        leaderboardList.innerHTML = '';
+
+        if (players.length === 0) {
+            leaderboardList.innerHTML = '<p>Нет данных о игроках</p>';
             return;
         }
-        await register(username, password);
-    });
 
-    logoutBtn.addEventListener('click', () => {
-        localStorage.clear();
-        currentGameId = null;
-        userId = null;
-        playerSymbol = null;
-        authSection.style.display = 'block';
-        gameSection.style.display = 'none';
-        gameControls.style.display = 'none';
-        userLogin.textContent = '';
-        status.textContent = 'Пожалуйста, войдите';
-        authStatus.textContent = '';
-        renderBoard([[0, 0, 0], [0, 0, 0], [0, 0, 0]]);
-        stopGameStatePolling();
-        showNotification('Вы вышли из аккаунта');
-    });
+        // Создаем таблицу для красивого отображения
+        const table = document.createElement('table');
+        table.className = 'leaderboard-table';
 
-    newGameBtn.addEventListener('click', () => {
-        modeModal.classList.add('active');
-    });
+        // Заголовок таблицы
+        const headerRow = document.createElement('tr');
+        headerRow.innerHTML = `
+        <th>Место</th>
+        <th>Игрок</th>
+        <th>WinRate</th>
+    `;
+        table.appendChild(headerRow);
 
-    humanModeBtn.addEventListener('click', () => {
-        modeModal.classList.remove('active');
-        startNewGame('human');
-    });
-
-    computerModeBtn.addEventListener('click', () => {
-        modeModal.classList.remove('active');
-        startNewGame('computer');
-    });
-
-    modeCloseBtn.addEventListener('click', () => {
-        modeModal.classList.remove('active');
-    });
-
-    availableGamesBtn.addEventListener('click', fetchAvailableGames);
-
-    availableGamesCloseBtn.addEventListener('click', () => {
-        availableGamesModal.classList.remove('active');
-    });
-
-    joinGameBtn.addEventListener('click', () => joinGame());
-
-    userInfoBtn.addEventListener('click', () => {
-        fetchUserInfo();
-        userInfoModal.classList.add('active');
-    });
-
-    userInfoCloseBtn.addEventListener('click', () => {
-        userInfoModal.classList.remove('active');
-    });
-
-    cells.forEach(cell => {
-        cell.addEventListener('click', async () => {
-            if (cell.classList.contains('disabled')) return;
-            const x = parseInt(cell.dataset.x);
-            const y = parseInt(cell.dataset.y);
-            await makeMove(x, y);
+        // Данные игроков
+        players.forEach((player, index) => {
+            const row = document.createElement('tr');
+            if (player.user_id === userId) {
+                row.classList.add('current-user');
+            }
+            row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${player.login|| player.userId}</td>
+            <td>${(player.winrate *100).toFixed(2)}%</td>
+        `;
+            table.appendChild(row);
         });
+
+        leaderboardList.appendChild(table);
+        document.getElementById('leaderboard-modal').classList.add('active');
+    }
+
+// События
+    completedGamesBtn.addEventListener('click', fetchCompletedGames);
+    completedGamesCloseBtn.addEventListener('click', () => {
+        completedGamesModal.classList.remove('active');
     });
 
-    notificationClose.addEventListener('click', () => {
-        notification.classList.remove('active');
+logoutBtn.addEventListener('click', () => {
+    localStorage.removeItem('accessToken');
+    currentGameId = null;
+    userId = null;
+    playerSymbol = null;
+    stopPolling();
+    authSection.style.display = 'block';
+    gameSection.style.display = 'none';
+    gameControls.style.display = 'none';
+    userLogin.textContent = '';
+    userRating.textContent = '';
+    status.textContent = 'Нажмите "Новая игра" для начала';
+    authStatus.textContent = '';
+    renderBoard([[0, 0, 0], [0, 0, 0], [0, 0, 0]]);
+    showNotification('Вы вышли из аккаунта');
+});
+
+newGameBtn.addEventListener('click', () => {
+    modeModal.classList.add('active');
+});
+
+humanModeBtn.addEventListener('click', () => {
+    modeModal.classList.remove('active');
+    startNewGame('human');
+});
+
+computerModeBtn.addEventListener('click', () => {
+    modeModal.classList.remove('active');
+    startNewGame('computer');
+});
+
+modeCloseBtn.addEventListener('click', () => {
+    modeModal.classList.remove('active');
+});
+
+availableGamesBtn.addEventListener('click', fetchAvailableGames);
+
+availableGamesCloseBtn.addEventListener('click', () => {
+    availableGamesModal.classList.remove('active');
+});
+
+joinGameBtn.addEventListener('click', () => joinGame());
+
+userInfoBtn.addEventListener('click', () => {
+    fetchUserInfo();
+    userInfoModal.classList.add('active');
+});
+
+userInfoCloseBtn.addEventListener('click', () => {
+    userInfoModal.classList.remove('active');
+});
+
+cells.forEach(cell => {
+    cell.addEventListener('click', async () => {
+        if (cell.classList.contains('disabled')) return;
+        const x = parseInt(cell.dataset.x);
+        const y = parseInt(cell.dataset.y);
+        await makeMove(x, y);
+    });
+});
+
+notificationClose.addEventListener('click', () => {
+    notification.classList.remove('active');
+});
+    leaderboardBtn.addEventListener('click', fetchLeaderboard);
+    leaderboardCloseBtn.addEventListener('click', () => {
+        document.getElementById('leaderboard-modal').classList.remove('active');
     });
 
-    // Проверка авторизации при загрузке
-    checkAuth();
+
+// Проверка авторизации при загрузке
+checkAuth();
 });

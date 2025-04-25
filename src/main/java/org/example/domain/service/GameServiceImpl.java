@@ -2,21 +2,24 @@ package org.example.domain.service;
 
 import jakarta.transaction.Transactional;
 import org.example.datasource.mapper.GameFieldMapper;
+import org.example.datasource.mapper.UserMapper;
 import org.example.datasource.model.CurrentGameEntity;
 import org.example.datasource.model.GameFieldEntity;
 import org.example.datasource.model.UserEntity;
 import org.example.datasource.mapper.CurrentGameMapper;
 import org.example.datasource.repository.GameFieldRepository;
-import org.example.domain.model.CurrentGame;
-import org.example.domain.model.GameField;
-import org.example.domain.model.GameMode;
-import org.example.domain.model.GameStatus;
+import org.example.domain.model.*;
 import org.example.datasource.repository.CurrentGameRepository;
 import org.example.datasource.repository.UserRepository;
+import org.example.web.model.UserRatingDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -34,9 +37,10 @@ public class GameServiceImpl implements GameService {
     private final GameFieldMapper gameFieldMapper;
     private final CurrentGameRepository currentGameRepository;
     private final CurrentGameMapper currentGameMapper;
+    private final UserMapper userMapper;
 
     public GameServiceImpl(CurrentGameRepository gameRepository, GameFieldRepository gameFieldRepository,
-                           UserRepository userRepository, CurrentGameMapper gameMapper, GameFieldMapper gameFieldMapper, GameFieldMapper gameFieldMapper1, CurrentGameRepository currentGameRepository, CurrentGameMapper currentGameMapper) {
+                           UserRepository userRepository, CurrentGameMapper gameMapper, GameFieldMapper gameFieldMapper, GameFieldMapper gameFieldMapper1, CurrentGameRepository currentGameRepository, CurrentGameMapper currentGameMapper, UserMapper userMapper) {
         this.gameRepository = gameRepository;
         this.gameFieldRepository = gameFieldRepository;
         this.userRepository = userRepository;
@@ -44,6 +48,7 @@ public class GameServiceImpl implements GameService {
         this.gameFieldMapper = gameFieldMapper1;
         this.currentGameRepository = currentGameRepository;
         this.currentGameMapper = currentGameMapper;
+        this.userMapper = userMapper;
     }
 
     @Transactional
@@ -52,10 +57,6 @@ public class GameServiceImpl implements GameService {
         log.info("Creating game for userId: {}, mode: {}", userId, mode);
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
-//        if (user.getCurrentGameId() != null) {
-//            log.warn("User {} is already in game {}", userId, user.getCurrentGameId());
-//            throw new IllegalStateException("Пользователь уже участвует в игре");
-//        }
 
         CurrentGame game = CurrentGame.builder()
                 .id(UUID.randomUUID())
@@ -64,7 +65,8 @@ public class GameServiceImpl implements GameService {
                 .playerId(userId)
                 .gameMode(mode)
                 .xPlayer(userId)
-                .oPlayer(mode == GameMode.COMPUTER ? null : null)
+                .oPlayer(null)
+                .dateOfCreation(Date.valueOf(LocalDate.now()))
                 .build();
 
         CurrentGameEntity entity = gameMapper.toEntity(game);
@@ -177,13 +179,11 @@ public class GameServiceImpl implements GameService {
     }
 
     @Override
-    @Transactional
     public CurrentGame updateGame(UUID gameId, UUID userId, int x, int y) {
         log.info("User {} making move in game {} at position ({}, {})", userId, gameId, x, y);
         CurrentGameEntity gameEntity = currentGameRepository.findById(gameId)
                 .orElseThrow(() -> new IllegalArgumentException("Игра не найдена"));
         CurrentGame game = gameMapper.toDomain(gameEntity);
-        log.info("Current playerId before move: {}", game.getPlayerId());
 
         // Проверка, участвует ли пользователь в игре
         if (!userId.equals(game.getXPlayer()) && !userId.equals(game.getOPlayer())) {
@@ -195,7 +195,7 @@ public class GameServiceImpl implements GameService {
             log.warn("Game {} is not in PLAYER_TURN state, status: {}", gameId, game.getState());
             throw new IllegalStateException("Игра не в состоянии хода");
         }
-        //Проверка очереди хода (для режима HUMAN)
+        // Проверка очереди хода (для режима HUMAN)
         if (game.getGameMode() == GameMode.HUMAN && !userId.equals(game.getPlayerId())) {
             log.warn("Not user {}'s turn in game {}, expected player: {}", userId, gameId, game.getPlayerId());
             throw new IllegalStateException("Не ваш ход");
@@ -227,17 +227,13 @@ public class GameServiceImpl implements GameService {
         } else if (result == -1 && game.getGameMode() == GameMode.COMPUTER) {
             game.setState(GameStatus.COMPUTER_WON);
             gameEntity.setState(GameStatus.COMPUTER_WON.getDisplayName());
-            gameEntity.setPlayerId(null);
+            gameEntity.setPlayerId(null); // Компьютер не имеет userId
             log.info("Computer won game {}", gameId);
         } else {
             // Игра продолжается
             if (game.getGameMode() == GameMode.HUMAN) {
                 // В режиме HUMAN переключаем ход на другого игрока
                 UUID nextPlayerId = userId.equals(game.getXPlayer()) ? game.getOPlayer() : game.getXPlayer();
-                if (nextPlayerId == null) {
-                    log.error("Next player ID is null for game {}", gameId);
-                    throw new IllegalStateException("Не удалось определить следующего игрока");
-                }
                 game.setPlayerId(nextPlayerId);
                 gameEntity.setPlayerId(nextPlayerId);
                 log.info("Next turn for player {} in game {}", nextPlayerId, gameId);
@@ -260,6 +256,7 @@ public class GameServiceImpl implements GameService {
                     gameEntity.setPlayerId(null);
                     log.info("Computer won game {} after its move", gameId);
                 } else {
+                    // Игра продолжается, ход возвращается игроку
                     game.setPlayerId(userId);
                     gameEntity.setPlayerId(userId);
                     log.info("Next turn for player {} in game {} after computer move", userId, gameId);
@@ -271,15 +268,8 @@ public class GameServiceImpl implements GameService {
         GameFieldEntity gameFieldEntity = gameEntity.getGameField();
         gameFieldEntity.setField(gameFieldMapper.toDataSourceFormat(board));
         gameFieldRepository.save(gameFieldEntity);
-
-        // Дополнительное логирование перед сохранением
-        log.info("Saving game entity with playerId: {}", gameEntity.getPlayerId());
         currentGameRepository.save(gameEntity);
-
-        // Проверка сохранённого состояния
-        CurrentGameEntity savedEntity = currentGameRepository.findById(gameId)
-                .orElseThrow(() -> new IllegalStateException("Игра не найдена после сохранения"));
-        log.info("Verified saved game entity with playerId: {}", savedEntity.getPlayerId());
+        log.info("Saved updated game field and entity for game {}", gameId);
 
         // Очищаем currentGameId игроков, если игра завершена
         if (game.getState() != GameStatus.PLAYER_TURN) {
@@ -297,6 +287,32 @@ public class GameServiceImpl implements GameService {
         CurrentGameEntity gameEntity = gameRepository.findById(gameId)
                 .orElseThrow(() -> new IllegalArgumentException("Игра не найдена"));
         return gameMapper.toDomain(gameEntity);
+    }
+
+    @Override
+    public List<CurrentGame> getFinishedGames(UUID playerId) {
+        log.info("Fetching all finished games for user with id: {}", playerId);
+
+        List<CurrentGameEntity> completedGames = gameRepository.findCompletedGames(
+                playerId, GameMode.HUMAN.getDisplayName(),
+                Arrays.asList(GameStatus.DRAW.getDisplayName(),
+                        GameStatus.PLAYER_WON.getDisplayName()));
+
+        log.info("Found {} available games", completedGames.size());
+        return completedGames.stream()
+                .map(gameMapper::toDomain)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<UserRatingDTO> getBestPlayers(int n) {
+        log.info("Fetching {} best players", n);
+        return currentGameRepository.findBestUsers(n).stream()
+                .map(row -> new UserRatingDTO(
+                        (UUID) row[0],
+                        ((BigDecimal) row[1]).doubleValue() // Явное преобразование
+                ))
+                .toList();
     }
 
     private int checkGameResult(int[][] board) {

@@ -3,6 +3,7 @@ package org.example.datasource.model;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.sql.Date;
 import java.util.UUID;
 
 @Entity
@@ -32,5 +33,8 @@ public class CurrentGameEntity {
     private UUID oPlayer;
 
     @Column(name = "player_id")
-    private UUID playerId; // Добавляем поле
+    private UUID playerId;
+
+    @Column(name="date_of_creation")
+    private Date dateOfCreation;
 }

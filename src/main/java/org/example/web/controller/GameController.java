@@ -1,15 +1,17 @@
 package org.example.web.controller;
 
+import io.jsonwebtoken.Claims;
 import org.example.domain.model.CurrentGame;
 import org.example.domain.model.GameMode;
 import org.example.domain.model.User;
 import org.example.domain.service.GameService;
 import org.example.domain.service.UserService;
 import org.example.web.mapper.GameMapper;
-import org.example.web.model.CreateGameRequest;
+import org.example.web.model.request.CreateGameRequest;
 import org.example.web.model.ErrorResponseDTO;
 import org.example.web.model.GameDTO;
 import org.example.web.model.MoveDTO;
+import org.example.web.provider.JwtProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,12 +28,14 @@ public class GameController {
     private final GameService gameService;
     private final UserService userService;
     private final GameMapper gameMapper;
+    private final JwtProvider jwtProvider;
 
     @Autowired
-    public GameController(GameService gameService, UserService userService, GameMapper gameMapper) {
+    public GameController(GameService gameService, UserService userService, GameMapper gameMapper, JwtProvider jwtProvider) {
         this.gameService = gameService;
         this.userService = userService;
         this.gameMapper = gameMapper;
+        this.jwtProvider = jwtProvider;
     }
 
     @PostMapping("/new")
@@ -129,18 +133,13 @@ public class GameController {
     }
 
     private UUID extractUserId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Basic ")) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return null;
         }
-        String base64Credentials = authHeader.substring("Basic ".length()).trim();
-        String credentials = new String(Base64.getDecoder().decode(base64Credentials));
-        String[] parts = credentials.split(":", 2);
-        if (parts.length != 2) {
-            return null;
-        }
-        User user = userService.findByLogin(parts[0]);
-        if (user != null && userService.findByLoginAndPassword(parts[0], parts[1]) != null) {
-            return user.getId();
+        String token = authHeader.substring("Bearer ".length()).trim();
+        if (jwtProvider.validateAccessToken(token)) {
+            Claims claims = jwtProvider.getClaims(token);
+            return UUID.fromString(claims.get("uuid", String.class));
         }
         return null;
     }

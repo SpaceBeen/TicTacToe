@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-drop schema tictactoe cascade;
-
 create schema if not exists tictactoe;
 
 CREATE TABLE if not exists tictactoe.game_field
@@ -15,12 +12,6 @@ create TABLE IF NOT EXISTS tictactoe.current_game
     id            uuid NOT NULL,
     game_field_id bigint,
     state         int,
-=======
-CREATE TABLE IF NOT EXISTS tictactoe.current_game
-(
-    id text COLLATE pg_catalog."default" NOT NULL,
-    game_field_id bigint,
->>>>>>> fb4ba35bd9e01822bc84a148f4a2063fced6048e
     CONSTRAINT current_game_pkey PRIMARY KEY (id),
     CONSTRAINT fk_game_field FOREIGN KEY (game_field_id)
         REFERENCES tictactoe.game_field (id) MATCH SIMPLE
@@ -30,7 +21,6 @@ CREATE TABLE IF NOT EXISTS tictactoe.current_game
 
 CREATE TABLE IF NOT EXISTS tictactoe.users
 (
-<<<<<<< HEAD
     id              uuid                              NOT NULL primary key,
     login           text COLLATE pg_catalog."default" NOT NULL unique,
     password        text COLLATE pg_catalog."default" NOT NULL,
@@ -49,6 +39,12 @@ alter table tictactoe.current_game
 alter table tictactoe.current_game
     drop column player_id cascade;
 
+
+-- Удаляем старые данные (если нужно)
+TRUNCATE TABLE school21.tictactoe.game_field CASCADE;
+TRUNCATE TABLE school21.tictactoe.current_game CASCADE;
+TRUNCATE TABLE school21.tictactoe.users CASCADE;
+
 -- Обновляем таблицу current_game
 ALTER TABLE tictactoe.current_game
     DROP COLUMN IF EXISTS player_id,
@@ -57,18 +53,10 @@ ALTER TABLE tictactoe.current_game
 
 alter table tictactoe.current_game
 add column player_id uuid;
-=======
-    id uuid NOT NULL,
-    login text COLLATE pg_catalog."default" NOT NULL,
-    password text COLLATE pg_catalog."default" NOT NULL,
-    CONSTRAINT users_pkey PRIMARY KEY (id),
-    CONSTRAINT users_login_key UNIQUE (login)
-);
 
-CREATE TABLE if not exists tictactoe.game_field
-(
-    id bigint GENERATED ALWAYS AS IDENTITY,
-    field text COLLATE pg_catalog."default" NOT NULL,
-    CONSTRAINT game_field_pkey PRIMARY KEY (id)
-);
->>>>>>> fb4ba35bd9e01822bc84a148f4a2063fced6048e
+
+
+
+
+alter table tictactoe.current_game
+add column date_of_creation date;

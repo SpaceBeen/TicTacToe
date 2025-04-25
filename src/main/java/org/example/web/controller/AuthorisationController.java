@@ -2,14 +2,16 @@ package org.example.web.controller;
 
 import jakarta.validation.Valid;
 import org.example.domain.service.AuthorisationService;
-import org.example.web.model.SignUpRequest;
+import org.example.web.model.request.JwtRequest;
+import org.example.web.model.request.RefreshJwtRequest;
+import org.example.web.model.request.SignUpRequest;
+import org.example.web.model.response.JwtResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth")
@@ -24,7 +26,6 @@ public class AuthorisationController {
 
     @PostMapping("/signup")
     public ResponseEntity<Map<String, String>> register(@Valid @RequestBody SignUpRequest request) {
-        System.out.println("Controller: Processing /auth/signup with login: " + request.getLogin());
         Map<String, String> response = new HashMap<>();
         try {
             boolean success = authorisationService.register(request);
@@ -36,33 +37,48 @@ public class AuthorisationController {
                 return ResponseEntity.badRequest().body(response);
             }
         } catch (Exception e) {
-            System.out.println("Controller: Error in /auth/signup: " + e.getMessage());
+            // Логирование: log.error("Error in /auth/signup: {}", e.getMessage());
             response.put("error", "Server error: " + e.getMessage());
             return ResponseEntity.status(500).body(response);
         }
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@RequestHeader(value = "Authorization", required = false) String authHeader) {
-        System.out.println("Controller: Processing /auth/login with authHeader: " + authHeader);
-        Map<String, String> response = new HashMap<>();
-        if (authHeader == null || authHeader.isEmpty()) {
-            response.put("error", "Missing Authorization header");
-            return ResponseEntity.status(401).body(response);
-        }
+    public ResponseEntity<?> login(@Valid @RequestBody JwtRequest request) {
         try {
-            UUID userId = authorisationService.authorise(authHeader);
-            if (userId != null) {
-                response.put("message", "Login successful");
-                return ResponseEntity.ok(response);
-            } else {
-                response.put("error", "Invalid credentials");
-                return ResponseEntity.status(401).body(response);
-            }
+            JwtResponse response = authorisationService.login(request);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.out.println("Controller: Error in /auth/login: " + e.getMessage());
-            response.put("error", "Server error: " + e.getMessage());
-            return ResponseEntity.status(500).body(response);
+            // Логирование: log.error("Error in /auth/login: {}", e.getMessage());
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Authentication failed: " + e.getMessage());
+            return ResponseEntity.status(401).body(errorResponse);
+        }
+    }
+
+    @PostMapping("/refresh-access")
+    public ResponseEntity<?> refreshAccessToken(@Valid @RequestBody RefreshJwtRequest request) {
+        try {
+            JwtResponse response = authorisationService.refreshAccessToken(request.getRefreshToken());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            // Логирование: log.error("Error in /auth/refresh-access: {}", e.getMessage());
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to refresh access token: " + e.getMessage());
+            return ResponseEntity.status(401).body(errorResponse);
+        }
+    }
+
+    @PostMapping("/refresh-token")
+    public ResponseEntity<?> refreshToken(@Valid @RequestBody RefreshJwtRequest request) {
+        try {
+            JwtResponse response = authorisationService.refreshRefreshToken(request.getRefreshToken());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            // Логирование: log.error("Error in /auth/refresh-token: {}", e.getMessage());
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to refresh token: " + e.getMessage());
+            return ResponseEntity.status(401).body(errorResponse);
         }
     }
 }

@@ -2,6 +2,7 @@ package org.example.domain.model;
 
 import lombok.*;
 
+import java.util.Date;
 import java.util.UUID;
 
 @Data
@@ -16,4 +17,5 @@ public class CurrentGame {
     private GameMode gameMode;
     private UUID xPlayer;
     private UUID oPlayer;
+    private Date dateOfCreation;
 }
